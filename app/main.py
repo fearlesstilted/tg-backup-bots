@@ -39,7 +39,12 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    settings = Settings.load()
+    try:
+        settings = Settings.load()
+    except RuntimeError as e:
+        logging.error("Configuration error: %s", e)
+        sys.exit(2)
+
     lock = SingleInstanceLock(lock_path_for(settings.database_path))
     try:
         lock.acquire()
