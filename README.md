@@ -155,6 +155,39 @@ Repeat steps 1–10 against the private bot using `ru_private` / `foreign_privat
 
 **After live smoke** — any bot token that was pasted into a chat, screenshot, ticket, or log line during the smoke test must be considered leaked. Rotate both tokens in @BotFather (`/revoke`), update `.env`, restart the service, and re-run the preflight before going to production. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the full pre-commit / pre-production list.
 
+## Deploy to Fly.io (free staging)
+
+Fly.io's Hobby plan runs a small persistent worker for free (3 × shared-cpu / 256 MB VMs + 3 GB total volume storage). The repo ships [`fly.toml`](fly.toml) and a slim [`Dockerfile`](Dockerfile); SQLite + WAL + the single-instance lock live on a mounted volume so deploys don't lose state.
+
+```bash
+# 1. Install flyctl (one-time)
+curl -L https://fly.io/install.sh | sh
+
+# 2. Sign up / log in (asks for credit card — Free tier won't charge)
+flyctl auth signup            # or: flyctl auth login
+
+# 3. From inside tg_backup_bots/:
+flyctl apps create tg-backup-bots          # pick a different name if taken — also edit fly.toml
+flyctl volumes create tg_backup_data --region fra --size 1
+flyctl secrets set \
+  REVIEWS_BOT_TOKEN=...      PRIVATE_BOT_TOKEN=... \
+  ADMIN_IDS=111,222          \
+  RU_REVIEWS_LINK=https://t.me/+...   FOREIGN_REVIEWS_LINK=https://t.me/+... \
+  RU_PRIVATE_LINK=https://t.me/+...   FOREIGN_PRIVATE_LINK=https://t.me/+...
+flyctl deploy
+flyctl logs                                # expect "Run polling for bot @… within ~30s"
+```
+
+**Single-instance**: Telegram allows only one polling consumer per token, so never run more than one machine. `fly.toml` already enables `strategy = "immediate"`; don't `flyctl scale count >1`.
+
+**Backup**: pull the SQLite file from the volume periodically:
+
+```bash
+flyctl ssh console --command "sqlite3 /data/bots.db .dump" > backup-$(date +%F).sql
+```
+
+For paid staging on Render (Background Worker + persistent disk, ~$7/mo) see [`render.yaml`](render.yaml) and the section below.
+
 ## Deploy to Render (staging)
 
 The repo ships [`render.yaml`](render.yaml) — a Render Blueprint that provisions a Background Worker + 1 GB persistent disk in one click. Background Workers are paid only (no free tier); current shape is `Starter` (~$7/mo) + disk (~$0.25/mo for 1 GB).
