@@ -28,10 +28,6 @@ class TestCompose(StatesGroup):
 _pending: dict[str, dict] = {}
 
 
-def _segments_for(bot_kind: str) -> set[str]:
-    return set(SEGMENTS_BY_BOT.get(bot_kind, set()))
-
-
 async def cmd_stats(message: Message, db: Database, bot_kind: str) -> None:
     rows = await users_svc.stats_by_segment(db, bot_kind)
     if not rows:
@@ -99,7 +95,7 @@ async def cmd_broadcast(
 ) -> None:
     segment = (command.args or "").strip()
     if (not is_valid_segment(bot_kind, segment)) or segment == "test":
-        valid = sorted(s for s in _segments_for(bot_kind) if s != "test")
+        valid = sorted(s for s in SEGMENTS_BY_BOT.get(bot_kind, frozenset()) if s != "test")
         await message.answer(
             f"Использование: /broadcast SEGMENT. Допустимо: {', '.join(valid)}"
         )
@@ -192,7 +188,8 @@ async def cmd_test(
     segment = (command.args or "").strip()
     if not is_valid_segment(bot_kind, segment):
         await message.answer(
-            f"Использование: /test SEGMENT. Допустимо: {', '.join(sorted(_segments_for(bot_kind)))}"
+            f"Использование: /test SEGMENT. Допустимо: "
+            f"{', '.join(sorted(SEGMENTS_BY_BOT.get(bot_kind, frozenset())))}"
         )
         return
     await state.set_state(TestCompose.awaiting_text)

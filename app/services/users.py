@@ -44,14 +44,6 @@ async def set_opted_in(
     await db.conn.commit()
 
 
-async def mark_inactive(db: Database, *, user_row_id: int) -> None:
-    await db.conn.execute(
-        "UPDATE users SET is_active=0, updated_at=datetime('now') WHERE id=?",
-        (user_row_id,),
-    )
-    # commit handled by caller's batch flush
-
-
 async def stats_by_segment(db: Database, bot_kind: str) -> list[dict]:
     cur = await db.conn.execute(
         """

@@ -2,6 +2,13 @@
 
 MVP of two Telegram backup bots (Reviews + Private), each serving a RU and a Foreign segment. Built on aiogram 3 + SQLite.
 
+## Site integration
+
+The ShmaliShop frontend (separate repo, `smalishop/`) reads six bot deep links from Supabase `site_settings` and renders them as language-matched buttons. **No frontend code change is needed** to wire these bots in — only six settings values. Full contract, exact values to paste, EN/DE fallback gotcha, click-through smoke plan, and a ready Supabase SQL snippet:
+
+- [INTEGRATION.md](INTEGRATION.md)
+- [integration/site_settings_upsert.sql](integration/site_settings_upsert.sql)
+
 ## Setup
 
 Python 3.11+.
@@ -147,6 +154,31 @@ For each bot, run the matching segment (`ru_reviews`/`foreign_reviews` for revie
 Repeat steps 1–10 against the private bot using `ru_private` / `foreign_private`.
 
 **After live smoke** — any bot token that was pasted into a chat, screenshot, ticket, or log line during the smoke test must be considered leaked. Rotate both tokens in @BotFather (`/revoke`), update `.env`, restart the service, and re-run the preflight before going to production. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the full pre-commit / pre-production list.
+
+## Deploy to Render (staging)
+
+The repo ships [`render.yaml`](render.yaml) — a Render Blueprint that provisions a Background Worker + 1 GB persistent disk in one click. Background Workers are paid only (no free tier); current shape is `Starter` (~$7/mo) + disk (~$0.25/mo for 1 GB).
+
+Steps:
+
+1. In [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint** → connect the GitHub repo → pick the branch.
+2. Render parses `render.yaml` and shows the missing secrets. Fill in:
+   - `REVIEWS_BOT_TOKEN`, `PRIVATE_BOT_TOKEN` — from @BotFather.
+   - `ADMIN_IDS` — comma-separated Telegram user IDs.
+   - `RU_REVIEWS_LINK`, `FOREIGN_REVIEWS_LINK`, `RU_PRIVATE_LINK`, `FOREIGN_PRIVATE_LINK` — invite links to the actual channels/chats.
+3. **Apply** → Render builds (`pip install -r requirements.txt`), mounts the disk, starts `python -m app.main`.
+4. Logs: service page → **Logs**. Expect `aiogram.dispatcher: Run polling for bot @reviewsegment_bot` and `@privatesegment_bot` within ~30s.
+
+Persistent disk is mounted at `/opt/render/project/src/data`; `DATABASE_PATH` is preset to `bots.db` inside it. SQLite WAL and the single-instance lock file live on the disk, so deploys/restarts don't lose state.
+
+**Backup**: Render disks are reliable but not backed up by default. Periodically dump the DB off-host, e.g. from a Render Shell:
+
+```bash
+sqlite3 /opt/render/project/src/data/bots.db ".backup '/tmp/backup-$(date +%F).db'"
+# then download via the Render Shell file browser or scp from your laptop
+```
+
+For VPS-based production deployment (no monthly Render bill), see the systemd section below — `render.yaml` is for staging/handoff convenience.
 
 ## Production deploy (systemd)
 
