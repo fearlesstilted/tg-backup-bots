@@ -1,23 +1,32 @@
-# Fly.io app config — Telegram polling bot, no HTTP exposed.
-# Rename `app` below if the name is taken; everything else is portable.
+# fly.toml app configuration file generated for tg-backup-bots-12zo9a on 2026-05-28T11:02:00Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "tg-backup-bots"
-primary_region = "fra"
+app = 'tg-backup-bots-12zo9a'
+primary_region = 'fra'
 
 [build]
 
+[deploy]
+  strategy = 'immediate'
+
 [env]
-  DATABASE_PATH = "/data/bots.db"
+  DATABASE_PATH = '/data/bots.db'
 
 [[mounts]]
-  source = "tg_backup_data"
-  destination = "/data"
+  source = 'tg_backup_data'
+  destination = '/data'
 
-[deploy]
-  # Telegram allows only one polling consumer per token; never run >1 machine.
-  strategy = "immediate"
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  cpu_kind = "shared"
+  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 256
