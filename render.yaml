@@ -1,0 +1,38 @@
+# Render Blueprint — Background Worker for both Telegram bots in one process.
+# Apply via Render Dashboard → New → Blueprint → connect this repo.
+# Secrets (sync: false) must be filled in the dashboard, not committed here.
+
+services:
+  - type: worker
+    name: tg-backup-bots
+    runtime: python
+    plan: starter
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.main
+    autoDeploy: true
+    disk:
+      name: bots-db
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      # SQLite + WAL/lock live on the mounted persistent disk so they
+      # survive deploys and restarts.
+      - key: DATABASE_PATH
+        value: /opt/render/project/src/data/bots.db
+      - key: REVIEWS_BOT_TOKEN
+        sync: false
+      - key: PRIVATE_BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: RU_REVIEWS_LINK
+        sync: false
+      - key: FOREIGN_REVIEWS_LINK
+        sync: false
+      - key: RU_PRIVATE_LINK
+        sync: false
+      - key: FOREIGN_PRIVATE_LINK
+        sync: false
