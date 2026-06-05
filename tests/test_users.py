@@ -79,15 +79,71 @@ class UsersServiceTests(unittest.IsolatedAsyncioTestCase):
             username="a", first_name="A", language_code=None,
         )
 
-        await users_svc.set_opted_in(
+        updated = await users_svc.set_opted_in(
             self.db, telegram_id=42, bot_kind="reviews", segment="ru_reviews"
         )
+        self.assertTrue(updated)
 
         rev = await self._row(42, "reviews", "ru_reviews")
         priv = await self._row(42, "private", "ru_private")
         self.assertEqual(rev["opted_in"], 1)
         self.assertEqual(rev["is_active"], 1)
         self.assertEqual(priv["opted_in"], 0)
+
+    async def test_set_opted_in_returns_false_when_row_missing(self) -> None:
+        updated = await users_svc.set_opted_in(
+            self.db, telegram_id=404, bot_kind="private", segment="ru_private"
+        )
+        self.assertFalse(updated)
+
+    async def test_opt_out_disables_all_rows_for_bot(self) -> None:
+        for segment in ("ru_reviews", "foreign_reviews"):
+            await users_svc.upsert_user(
+                self.db,
+                telegram_id=42,
+                bot_kind="reviews",
+                segment=segment,
+                username="a",
+                first_name="A",
+                language_code=None,
+            )
+            await users_svc.set_opted_in(
+                self.db, telegram_id=42, bot_kind="reviews", segment=segment
+            )
+
+        changed = await users_svc.opt_out(self.db, telegram_id=42, bot_kind="reviews")
+        self.assertEqual(changed, 2)
+
+        for segment in ("ru_reviews", "foreign_reviews"):
+            row = await self._row(42, "reviews", segment)
+            self.assertEqual(row["opted_in"], 0)
+            self.assertEqual(row["is_active"], 0)
+
+    async def test_upsert_restores_active_without_opt_in(self) -> None:
+        await users_svc.upsert_user(
+            self.db,
+            telegram_id=42,
+            bot_kind="reviews",
+            segment="ru_reviews",
+            username="a",
+            first_name="A",
+            language_code=None,
+        )
+        await users_svc.opt_out(self.db, telegram_id=42, bot_kind="reviews")
+
+        await users_svc.upsert_user(
+            self.db,
+            telegram_id=42,
+            bot_kind="reviews",
+            segment="ru_reviews",
+            username="a",
+            first_name="A",
+            language_code=None,
+        )
+
+        row = await self._row(42, "reviews", "ru_reviews")
+        self.assertEqual(row["is_active"], 1)
+        self.assertEqual(row["opted_in"], 0)
 
 
 if __name__ == "__main__":

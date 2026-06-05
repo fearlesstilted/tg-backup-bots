@@ -21,12 +21,6 @@ from .db import Database
 from .services import broadcasts as bcast_svc
 
 
-class _StubSettings:
-    """Minimal stand-in for Settings — broadcast engine only reads what it needs."""
-
-    segment_links: dict[str, str] = {}
-
-
 async def _seed_users(db: Database, *, bot_kind: str, segment: str, n: int) -> None:
     rows = [
         (1_000_000_000 + i, bot_kind, segment, f"sim_{i}", f"Sim{i}", "en")
@@ -71,7 +65,7 @@ async def _main(args: argparse.Namespace) -> None:
             # No artificial sleep — the engine's own rate limiter sets the pace.
 
         t0 = time.monotonic()
-        await bcast_svc.run_broadcast(stub_send, db, _StubSettings(), bid)
+        await bcast_svc.run_broadcast(stub_send, db, bid)
         dt = time.monotonic() - t0
 
         final = await bcast_svc.get_broadcast(db, bid)

@@ -50,7 +50,7 @@ class HealthcheckTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rc, 0, msg=text)
         self.assertIn("OK preflight", text)
         self.assertIn("journal_mode  = wal", text)
-        self.assertIn("admin_ids        = [42]", text)
+        self.assertIn("admin_ids        = 1 configured", text)
 
     async def test_missing_env_var_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,6 +89,24 @@ class HealthcheckTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("PRIVATE_BOT_TOKEN", text)
         self.assertIn("FOREIGN_PRIVATE_LINK", text)
 
+    async def test_private_token_enforcement_requires_secret(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = _good_env(str(Path(tmp) / "h.db"))
+            env["PRIVATE_REQUIRE_ACCESS_TOKEN"] = "true"
+            env["PRIVATE_ACCESS_SECRET"] = "generate-long-random-secret-before-production"
+            rc, text = await self._run(env)
+        self.assertEqual(rc, 2)
+        self.assertIn("PRIVATE_ACCESS_SECRET", text)
+
+    async def test_placeholder_secret_warns_when_not_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = _good_env(str(Path(tmp) / "h.db"))
+            env["PRIVATE_REQUIRE_ACCESS_TOKEN"] = "false"
+            env["PRIVATE_ACCESS_SECRET"] = "generate-long-random-secret-before-production"
+            rc, text = await self._run(env)
+        self.assertEqual(rc, 0, msg=text)
+        self.assertIn("WARN config: PRIVATE_ACCESS_SECRET", text)
+
 
 class SettingsLoadTests(unittest.TestCase):
     def test_missing_required_var_raises(self) -> None:
@@ -105,6 +123,15 @@ class SettingsLoadTests(unittest.TestCase):
         with _NoDotenv(), patch.dict(os.environ, env, clear=True):
             s = Settings.load()
         self.assertEqual(s.admin_ids, frozenset({1, 2, 3}))
+
+    def test_private_token_flags_parse(self) -> None:
+        env = _good_env("/tmp/whatever.db")
+        env["PRIVATE_REQUIRE_ACCESS_TOKEN"] = "yes"
+        env["PRIVATE_ACCESS_SECRET"] = "real-secret"
+        with _NoDotenv(), patch.dict(os.environ, env, clear=True):
+            s = Settings.load()
+        self.assertTrue(s.private_require_access_token)
+        self.assertEqual(s.private_access_secret, "real-secret")
 
     def test_invalid_admin_ids_raise_runtime_error(self) -> None:
         env = _good_env("/tmp/whatever.db")

@@ -1,8 +1,14 @@
 # ShmaliShop site ↔ tg_backup_bots integration
 
-This document is the contract between the ShmaliShop frontend and the two backup bots. **The site needs no code changes** — both link groups are admin-editable settings stored in Supabase `site_settings` as `(key, value)` pairs. Updating the bots = updating six string values.
+This document is the contract between the ShmaliShop frontend and the two backup bots.
+Reviews links are public and can stay as static `site_settings` values. Private
+links should use signed short tokens in production, otherwise any copied
+`privatesegment_bot?start=ru_private` URL gives access to the private invite.
 
 ## Bots
+
+> TODO before production: replace these temporary bot handles with final
+> BotFather usernames everywhere in this document and in `site_settings`.
 
 | Bot kind | Telegram handle |
 | --- | --- |
@@ -30,7 +36,7 @@ Both groups are admin-editable in the site admin UI: **`/admin/links` → AdminS
 | `reviews_tg_url_en` | `https://t.me/reviewsegment_bot?start=foreign_reviews` |
 | `reviews_tg_url_de` | `https://t.me/reviewsegment_bot?start=foreign_reviews` |
 
-### Private (VIP — only paid users see the button)
+### Private (VIP — staging-only static links)
 
 | Key | Value |
 | --- | --- |
@@ -39,6 +45,40 @@ Both groups are admin-editable in the site admin UI: **`/admin/links` → AdminS
 | `private_tg_url_de` | `https://t.me/privatesegment_bot?start=foreign_private` |
 
 The `FOREIGN_PRIVATE_LINK` in the bot's `.env` is the invite the user receives after opt-in.
+
+Do not use the static private values as the final production gate. They are OK
+for smoke tests while `PRIVATE_REQUIRE_ACCESS_TOKEN=false`. For production set
+`PRIVATE_REQUIRE_ACCESS_TOKEN=true` in the bot. The site calls Supabase Edge
+Function `create-telegram-access-token`, which:
+
+1. requires `Authorization` header (`verify_jwt = true`);
+2. resolves the current Supabase user via `auth.getUser()`;
+3. queries `orders` with the service-role key and accepts the user only when at
+   least one row matches `payment_status = 'paid'` OR `status = 'completed'`;
+4. accepts request body `{ "segment": "ru_private" | "foreign_private" }` and
+   rejects anything else;
+5. signs a short token with `TELEGRAM_PRIVATE_ACCESS_SECRET` (same value as
+   `PRIVATE_ACCESS_SECRET` on the bot host);
+6. returns `{ "url": "https://t.me/<PRIVATE_BOT_USERNAME>?start=<token>" }`.
+
+The token format is intentionally short enough for Telegram deep links:
+`v1.<segment-code>.<expiry-base36>.<hmac-signature>`. Current private segment
+codes are `rp` (`ru_private`) and `fp` (`foreign_private`). TTL is 10 minutes.
+The secret must live only in Supabase/VPS env-vars, never in React.
+
+### Production env vars
+
+Supabase (function env):
+- `TELEGRAM_PRIVATE_ACCESS_SECRET` — shared HMAC secret
+- `PRIVATE_BOT_USERNAME` — e.g. `privatesegment_bot`
+
+Bot VPS:
+- `PRIVATE_ACCESS_SECRET` — same value as the Supabase secret
+- `PRIVATE_REQUIRE_ACCESS_TOKEN=true`
+
+Reviews links (`reviews_tg_url_*`) stay static and are unaffected.
+The static `private_tg_url_*` values are staging-only fallbacks; the production
+VIP button on `Profile.tsx` invokes the Edge Function directly.
 
 ## Gotcha: the Header EN/DE fallback
 

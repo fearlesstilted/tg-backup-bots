@@ -5,6 +5,21 @@ from typing import Optional
 from ..db import Database
 
 
+async def get_user(
+    db: Database, *, telegram_id: int, bot_kind: str, segment: str
+) -> dict | None:
+    cur = await db.conn.execute(
+        """
+        SELECT *
+        FROM users
+        WHERE telegram_id=? AND bot_kind=? AND segment=?
+        """,
+        (telegram_id, bot_kind, segment),
+    )
+    row = await cur.fetchone()
+    return dict(row) if row else None
+
+
 async def upsert_user(
     db: Database,
     *,
@@ -23,6 +38,7 @@ async def upsert_user(
           username      = excluded.username,
           first_name    = excluded.first_name,
           language_code = excluded.language_code,
+          is_active     = 1,
           updated_at    = datetime('now')
         """,
         (telegram_id, bot_kind, segment, username, first_name, language_code),
@@ -32,8 +48,8 @@ async def upsert_user(
 
 async def set_opted_in(
     db: Database, *, telegram_id: int, bot_kind: str, segment: str
-) -> None:
-    await db.conn.execute(
+) -> bool:
+    cur = await db.conn.execute(
         """
         UPDATE users
         SET opted_in=1, is_active=1, updated_at=datetime('now')
@@ -42,6 +58,20 @@ async def set_opted_in(
         (telegram_id, bot_kind, segment),
     )
     await db.conn.commit()
+    return (cur.rowcount or 0) > 0
+
+
+async def opt_out(db: Database, *, telegram_id: int, bot_kind: str) -> int:
+    cur = await db.conn.execute(
+        """
+        UPDATE users
+        SET opted_in=0, is_active=0, updated_at=datetime('now')
+        WHERE telegram_id=? AND bot_kind=?
+        """,
+        (telegram_id, bot_kind),
+    )
+    await db.conn.commit()
+    return cur.rowcount or 0
 
 
 async def stats_by_segment(db: Database, bot_kind: str) -> list[dict]:

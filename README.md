@@ -40,6 +40,8 @@ python -m app.main
 | `PRIVATE_BOT_TOKEN` | Bot token for the private bot |
 | `ADMIN_IDS` | Comma-separated Telegram user IDs allowed to run admin commands |
 | `DATABASE_PATH` | SQLite file path (default `./bots.db`) |
+| `PRIVATE_REQUIRE_ACCESS_TOKEN` | If `true`, the private bot rejects raw `ru_private` / `foreign_private` starts and requires signed short tokens |
+| `PRIVATE_ACCESS_SECRET` | Shared HMAC secret used to validate private bot access tokens |
 | `RU_REVIEWS_LINK` / `FOREIGN_REVIEWS_LINK` | Invite links sent after opt-in (reviews bot) |
 | `RU_PRIVATE_LINK` / `FOREIGN_PRIVATE_LINK` | Invite links sent after opt-in (private bot) |
 
@@ -53,6 +55,20 @@ Allowed segments per bot:
 - private bot: `ru_private`, `foreign_private`, `test`
 
 Anything else is stored as `unknown` and the user gets a neutral fallback message (no link).
+
+For production private-chat access, set `PRIVATE_REQUIRE_ACCESS_TOKEN=true`.
+Then the private bot will only accept a short signed token in `/start`, for
+example `https://t.me/privatesegment_bot?start=v1.rp...`. Raw links like
+`?start=ru_private` should stay disabled in production because browser-visible
+links can be copied by non-paying users. The token must be generated server-side
+by the site after checking that the user has a paid order; never generate it in
+frontend JavaScript because that would leak `PRIVATE_ACCESS_SECRET`.
+
+For manual smoke tests you can generate one token locally:
+
+```bash
+PRIVATE_ACCESS_SECRET=... .venv/bin/python -m app.access_tokens ru_private 600
+```
 
 ## Admin commands
 

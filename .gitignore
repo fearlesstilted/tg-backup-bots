@@ -11,9 +11,15 @@ __pycache__/
 *.db
 *.db-shm
 *.db-wal
+*.db.gz
 sim.db
 bots.db
+backups/
 
 # Single-instance lock files
 *.lock
 *.db.lock
+
+# Local reports / coverage
+.coverage
+htmlcov/

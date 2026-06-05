@@ -20,6 +20,7 @@ from .db import Database
 PLACEHOLDER_VALUES = {
     "REVIEWS_BOT_TOKEN": ("replace-me",),
     "PRIVATE_BOT_TOKEN": ("replace-me",),
+    "PRIVATE_ACCESS_SECRET": ("replace-me", "generate-long-random-secret"),
     "RU_REVIEWS_LINK": ("ru_reviews_invite",),
     "FOREIGN_REVIEWS_LINK": ("foreign_reviews_invite",),
     "RU_PRIVATE_LINK": ("ru_private_invite",),
@@ -63,6 +64,27 @@ async def _check(out: TextIO) -> int:
         )
         return 2
 
+    if settings.private_require_access_token:
+        markers = PLACEHOLDER_VALUES["PRIVATE_ACCESS_SECRET"]
+        if not settings.private_access_secret or _is_placeholder(
+            settings.private_access_secret, markers
+        ):
+            print(
+                "FAIL config: PRIVATE_REQUIRE_ACCESS_TOKEN=true needs "
+                "PRIVATE_ACCESS_SECRET with a non-placeholder value",
+                file=out,
+            )
+            return 2
+    elif _is_placeholder(
+        settings.private_access_secret,
+        PLACEHOLDER_VALUES["PRIVATE_ACCESS_SECRET"],
+    ):
+        print(
+            "WARN config: PRIVATE_ACCESS_SECRET is still a placeholder; "
+            "set a real value before enabling PRIVATE_REQUIRE_ACCESS_TOKEN=true",
+            file=out,
+        )
+
     missing_links = [k for k, v in settings.segment_links.items() if not v]
     if missing_links:
         print(f"FAIL config: empty invite links: {', '.join(missing_links)}", file=out)
@@ -91,7 +113,11 @@ async def _check(out: TextIO) -> int:
     print("OK preflight", file=out)
     print(f"  db.path          = {settings.database_path}", file=out)
     print(f"  db.journal_mode  = {jm}", file=out)
-    print(f"  admin_ids        = {sorted(settings.admin_ids)}", file=out)
+    print(f"  admin_ids        = {len(settings.admin_ids)} configured", file=out)
+    print(
+        f"  private_tokens   = {settings.private_require_access_token}",
+        file=out,
+    )
     print("  segments allowed:", file=out)
     for bot_kind, segs in SEGMENTS_BY_BOT.items():
         print(f"    {bot_kind:<7} -> {', '.join(sorted(segs))}", file=out)

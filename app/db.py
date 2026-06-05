@@ -46,12 +46,17 @@ CREATE TABLE IF NOT EXISTS broadcast_deliveries (
 );
 CREATE INDEX IF NOT EXISTS idx_deliveries_broadcast
   ON broadcast_deliveries(broadcast_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_deliveries_broadcast_user
+  ON broadcast_deliveries(broadcast_id, telegram_id);
+CREATE INDEX IF NOT EXISTS idx_deliveries_user
+  ON broadcast_deliveries(telegram_id);
 """
 
 
 class Database:
-    def __init__(self, conn: aiosqlite.Connection) -> None:
+    def __init__(self, conn: aiosqlite.Connection, path: str) -> None:
         self.conn = conn
+        self.path = path
 
     @classmethod
     async def connect(cls, path: str) -> "Database":
@@ -62,7 +67,7 @@ class Database:
         await conn.execute("PRAGMA foreign_keys=ON;")
         await conn.executescript(SCHEMA)
         await conn.commit()
-        return cls(conn)
+        return cls(conn, path)
 
     async def close(self) -> None:
         await self.conn.close()

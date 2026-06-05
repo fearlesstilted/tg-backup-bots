@@ -21,6 +21,8 @@ class Settings:
     admin_ids: frozenset[int]
     database_path: str
     segment_links: Mapping[str, str]
+    private_access_secret: str
+    private_require_access_token: bool
 
     @classmethod
     def load(cls) -> "Settings":
@@ -42,6 +44,12 @@ class Settings:
                 "ADMIN_IDS must be a comma-separated list of Telegram user IDs"
             ) from e
 
+        def _bool(key: str, default: bool = False) -> bool:
+            raw = os.environ.get(key)
+            if raw is None:
+                return default
+            return raw.strip().lower() in {"1", "true", "yes", "on"}
+
         return cls(
             reviews_bot_token=_req("REVIEWS_BOT_TOKEN"),
             private_bot_token=_req("PRIVATE_BOT_TOKEN"),
@@ -53,6 +61,8 @@ class Settings:
                 "ru_private": _req("RU_PRIVATE_LINK"),
                 "foreign_private": _req("FOREIGN_PRIVATE_LINK"),
             },
+            private_access_secret=os.environ.get("PRIVATE_ACCESS_SECRET", ""),
+            private_require_access_token=_bool("PRIVATE_REQUIRE_ACCESS_TOKEN"),
         )
 
     def token_for(self, bot_kind: str) -> str:

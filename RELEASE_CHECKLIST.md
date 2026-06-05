@@ -12,9 +12,12 @@
 ## Before production
 
 - [ ] Rotate any bot token that was pasted into a chat, screenshot, ticket, log line, or PR description during smoke testing. In @BotFather: `/revoke` for each bot, then copy the new tokens into the production `.env`.
+- [ ] For private-chat production access, set `PRIVATE_REQUIRE_ACCESS_TOKEN=true` and replace `PRIVATE_ACCESS_SECRET` with a long random value shared only with the server-side site endpoint.
 - [ ] Update `.env` on the deploy host. `chmod 600 .env`. Never commit it.
 - [ ] `python -m app.healthcheck` on the deploy host — exits `0`.
 - [ ] `systemctl daemon-reload && systemctl restart tg-backup-bots`.
 - [ ] `journalctl -u tg-backup-bots -f` — confirm both bots start polling, no `TelegramUnauthorizedError`, no `TelegramConflictError`, no `AlreadyRunningError`.
+- [ ] Confirm no other host/Fly/Render machine is running the same bot tokens. Watch logs for at least 60 seconds after restart; no `TelegramConflictError` should appear.
+- [ ] If the service restarted while an admin was composing a broadcast, the admin must run `/broadcast` again; compose state is intentionally in-memory.
 - [ ] Smoke a single `/start <segment>` from a personal account against each bot; confirm opt-in link is delivered.
 - [ ] Back up `bots.db` (and `-wal` / `-shm` siblings if present) to off-host storage. Re-run the backup whenever broadcasts grow significantly.

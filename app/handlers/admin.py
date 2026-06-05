@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
+import time
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandObject
@@ -15,6 +17,8 @@ from ..keyboards import broadcast_confirm_keyboard
 from ..services import broadcasts as bcast_svc
 from ..services import users as users_svc
 
+log = logging.getLogger(__name__)
+
 
 class BroadcastCompose(StatesGroup):
     awaiting_text = State()
@@ -26,6 +30,58 @@ class TestCompose(StatesGroup):
 
 # In-memory pending broadcasts keyed by short token; admin sessions are short-lived.
 _pending: dict[str, dict] = {}
+_background_tasks: set[asyncio.Task] = set()
+PENDING_TTL_SEC = 3600
+BACKGROUND_SHUTDOWN_TIMEOUT_SEC = 15.0
+
+
+def _sweep_pending(now: float | None = None) -> None:
+    current = time.time() if now is None else now
+    expired = [
+        token
+        for token, pending in _pending.items()
+        if current - float(pending.get("created_at", 0)) > PENDING_TTL_SEC
+    ]
+    for token in expired:
+        _pending.pop(token, None)
+
+
+def _start_background_task(coro) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+async def _run_broadcast_task(bot: Bot, db_path: str, broadcast_id: int) -> None:
+    broadcast_db = await Database.connect(db_path)
+
+    async def sender(chat_id: int, text: str) -> None:
+        await bot.send_message(chat_id, text)
+
+    try:
+        await bcast_svc.run_broadcast(sender, broadcast_db, broadcast_id)
+    finally:
+        await broadcast_db.close()
+
+
+async def shutdown_background_tasks(db: Database) -> None:
+    _sweep_pending()
+    if not _background_tasks:
+        return
+    await db.mark_stale_broadcasts_interrupted()
+    done, pending = await asyncio.wait(
+        set(_background_tasks),
+        timeout=BACKGROUND_SHUTDOWN_TIMEOUT_SEC,
+    )
+    for task in done:
+        try:
+            task.result()
+        except Exception:
+            log.exception("Background broadcast task failed during shutdown.")
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 async def cmd_stats(message: Message, db: Database, bot_kind: str) -> None:
@@ -111,6 +167,7 @@ async def broadcast_text(
     db: Database,
     bot_kind: str,
 ) -> None:
+    _sweep_pending()
     data = await state.get_data()
     segment = data["segment"]
     text = message.html_text or message.text
@@ -124,6 +181,7 @@ async def broadcast_text(
         "segment": segment,
         "text": text,
         "total": total,
+        "created_at": time.time(),
     }
     await state.clear()
 
@@ -137,12 +195,24 @@ async def cb_broadcast(
     cb: CallbackQuery,
     bot: Bot,
     db: Database,
-    settings: Settings,
 ) -> None:
-    _, action, token = cb.data.split(":", 2)
+    parts = (cb.data or "").split(":", 2)
+    if len(parts) != 3:
+        await cb.answer("Bad request.", show_alert=True)
+        return
+
+    _, action, token = parts
     pending = _pending.get(token)
     if not pending or pending["admin_id"] != cb.from_user.id:
         await cb.answer("Сессия истекла или не ваша.", show_alert=True)
+        return
+    if time.time() - float(pending.get("created_at", 0)) > PENDING_TTL_SEC:
+        _pending.pop(token, None)
+        await cb.answer("Сессия рассылки устарела.", show_alert=True)
+        try:
+            await cb.message.edit_text("Сессия рассылки устарела. Запустите /broadcast заново.")
+        except Exception:
+            pass
         return
 
     if action == "cancel":
@@ -169,8 +239,8 @@ async def cb_broadcast(
             created_by=cb.from_user.id,
             total=pending["total"],
         )
-        asyncio.create_task(
-            bcast_svc.run_broadcast(bot, db, settings, broadcast_id)
+        _start_background_task(
+            _run_broadcast_task(bot, db.path, broadcast_id)
         )
         await cb.message.edit_text(
             f"🚀 Рассылка #{broadcast_id} запущена. "
