@@ -1,23 +1,30 @@
 # Release checklist
 
-## Before commit
+## Перед commit
 
-- [ ] `python3 -m compileall app tests` — no syntax errors.
-- [ ] `.venv/bin/python -m unittest discover -s tests` — all tests pass.
-- [ ] `.venv/bin/python -m app.simulate_broadcast --db /tmp/tg_backup_sim.db --users 100 --bot reviews --segment test` — completes with `Status=completed`.
-- [ ] `.venv/bin/python -m app.healthcheck` — exits `0`, prints `OK preflight` (skip if you haven't set up `.env` locally — the missing-env path is exercised by tests).
-- [ ] `git status --short` — only intentional source/test/doc files are listed.
-- [ ] `git status --ignored --short | grep '^!! '` includes `.env`, `bots.db`, `bots.db-wal`, `bots.db-shm`, `bots.db.lock` if they exist. None of those must appear under `??`.
+- [ ] `python3 -m compileall app tests` — нет syntax errors.
+- [ ] `.venv/bin/python -m unittest discover -s tests` — тесты проходят.
+- [ ] `.venv/bin/python -m app.simulate_broadcast --db /tmp/tg_backup_sim.db --users 100 --bot reviews --segment test` — simulation завершается со статусом `completed`.
+- [ ] `.venv/bin/python -m app.healthcheck` — exit code `0`, выводит `OK preflight`.
+- [ ] `git status --short` — только ожидаемые source/test/doc изменения.
+- [ ] `.env`, `bots.db`, `bots.db-wal`, `bots.db-shm`, `bots.db.lock`, `backups/` не попали в git.
 
-## Before production
+## Перед production
 
-- [ ] Rotate any bot token that was pasted into a chat, screenshot, ticket, log line, or PR description during smoke testing. In @BotFather: `/revoke` for each bot, then copy the new tokens into the production `.env`.
-- [ ] For private-chat production access, set `PRIVATE_REQUIRE_ACCESS_TOKEN=true` and replace `PRIVATE_ACCESS_SECRET` with a long random value shared only with the server-side site endpoint.
-- [ ] Update `.env` on the deploy host. `chmod 600 .env`. Never commit it.
-- [ ] `python -m app.healthcheck` on the deploy host — exits `0`.
-- [ ] `systemctl daemon-reload && systemctl restart tg-backup-bots`.
-- [ ] `journalctl -u tg-backup-bots -f` — confirm both bots start polling, no `TelegramUnauthorizedError`, no `TelegramConflictError`, no `AlreadyRunningError`.
-- [ ] Confirm no other host/Fly/Render machine is running the same bot tokens. Watch logs for at least 60 seconds after restart; no `TelegramConflictError` should appear.
-- [ ] If the service restarted while an admin was composing a broadcast, the admin must run `/broadcast` again; compose state is intentionally in-memory.
-- [ ] Smoke a single `/start <segment>` from a personal account against each bot; confirm opt-in link is delivered.
-- [ ] Back up `bots.db` (and `-wal` / `-shm` siblings if present) to off-host storage. Re-run the backup whenever broadcasts grow significantly.
+- [ ] Перевыпустить bot token, если он попадал в чат, скриншот, ticket, log или PR description.
+- [ ] В BotFather: `/revoke` для каждого скомпрометированного бота.
+- [ ] Обновить `.env` на VPS.
+- [ ] `chmod 600 .env`.
+- [ ] Для private-chat production access включить `PRIVATE_REQUIRE_ACCESS_TOKEN=true`.
+- [ ] Задать новый длинный `PRIVATE_ACCESS_SECRET`.
+- [ ] Убедиться, что такой же secret задан на серверной стороне сайта/Supabase function.
+- [ ] Запустить `python -m app.healthcheck` на VPS.
+- [ ] Выполнить `systemctl daemon-reload && systemctl restart tg-backup-bots`.
+- [ ] Проверить `journalctl -u tg-backup-bots -f`.
+- [ ] Убедиться, что нет `TelegramUnauthorizedError`.
+- [ ] Убедиться, что нет `TelegramConflictError`.
+- [ ] Убедиться, что нет второго процесса с теми же bot tokens.
+- [ ] Сделать smoke test `/start <segment>` в каждом боте.
+- [ ] Проверить, что opt-in выдаёт правильную ссылку.
+- [ ] Проверить `/stats`, `/broadcast`, `Dry-run`, `/last`.
+- [ ] Сделать backup `bots.db` и, если есть, `-wal` / `-shm`.

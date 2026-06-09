@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import secrets
 import time
@@ -294,10 +295,8 @@ async def cb_broadcast(
     if time.time() - float(pending.get("created_at", 0)) > PENDING_TTL_SEC:
         _pending.pop(token, None)
         await cb.answer("Сессия рассылки устарела.", show_alert=True)
-        try:
+        with contextlib.suppress(Exception):
             await cb.message.edit_text("Сессия рассылки устарела. Запустите /broadcast заново.")
-        except Exception:
-            pass
         return
 
     if action == "cancel":

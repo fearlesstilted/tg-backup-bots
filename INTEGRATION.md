@@ -1,34 +1,44 @@
-# ShmaliShop site ↔ tg_backup_bots integration
+# Интеграция сайта ShmaliShop и tg_backup_bots
 
-This document is the contract between the ShmaliShop frontend and the two backup bots.
-Reviews links are public and can stay as static `site_settings` values. Private
-links should use signed short tokens in production, otherwise any copied
-`privatesegment_bot?start=ru_private` URL gives access to the private invite.
+Этот документ описывает контракт между сайтом ShmaliShop и двумя backup-ботами.
 
-## Bots
+Reviews links публичные и могут храниться как статические значения в
+`site_settings`. Private links в production должны выдаваться через подписанный
+short token, иначе скопированная ссылка вида `privatesegment_bot?start=ru_private`
+даёт доступ к приватному invite.
 
-> TODO before production: replace these temporary bot handles with final
-> BotFather usernames everywhere in this document and in `site_settings`.
+## Боты
+
+> Перед production заменить временные usernames на финальные usernames из
+> BotFather во всём документе и в `site_settings`.
 
 | Bot kind | Telegram handle |
 | --- | --- |
 | `reviews` | `@reviewsegment_bot` |
 | `private` | `@privatesegment_bot` |
 
-> The handles above are temporary while we iterate. Re-issuing a bot in @BotFather changes only the username — the same `?start=<segment>` deep-link format keeps working, you just refresh the six values below.
+Формат deep-link остаётся тем же:
 
-## Settings keys used by the site
+```text
+https://t.me/<bot_username>?start=<segment>
+```
 
-| Setting key | Used in | Rendered to user when |
+## Ключи `site_settings`, которые читает сайт
+
+| Setting key | Где используется | Когда показывается |
 | --- | --- | --- |
-| `reviews_tg_url_ru` / `_en` / `_de` | `src/components/Header.tsx` (publicReviewsUrl) | Reviews button in header, language-matched |
-| `private_tg_url_ru` / `_en` / `_de` | `src/pages/Profile.tsx` (vipUrl) | "Join VIP" button on the profile page, shown only when `hasPaidOrders` is true |
+| `reviews_tg_url_ru` / `_en` / `_de` | `src/components/Header.tsx` | кнопка отзывов в header |
+| `private_tg_url_ru` / `_en` / `_de` | `src/pages/Profile.tsx` | VIP кнопка в профиле, только если `hasPaidOrders=true` |
 
-Both groups are admin-editable in the site admin UI: **`/admin/links` → AdminSupportLinks**.
+Обе группы редактируются в админке сайта:
 
-## Values to paste
+```text
+/admin/links → AdminSupportLinks
+```
 
-### Reviews (public — anyone can use)
+## Значения для Reviews
+
+Reviews bot публичный, эти ссылки можно использовать статически:
 
 | Key | Value |
 | --- | --- |
@@ -36,7 +46,13 @@ Both groups are admin-editable in the site admin UI: **`/admin/links` → AdminS
 | `reviews_tg_url_en` | `https://t.me/reviewsegment_bot?start=foreign_reviews` |
 | `reviews_tg_url_de` | `https://t.me/reviewsegment_bot?start=foreign_reviews` |
 
-### Private (VIP — staging-only static links)
+## Значения для Private
+
+Эти static links подходят только для staging/smoke, пока:
+
+```text
+PRIVATE_REQUIRE_ACCESS_TOKEN=false
+```
 
 | Key | Value |
 | --- | --- |
@@ -44,95 +60,102 @@ Both groups are admin-editable in the site admin UI: **`/admin/links` → AdminS
 | `private_tg_url_en` | `https://t.me/privatesegment_bot?start=foreign_private` |
 | `private_tg_url_de` | `https://t.me/privatesegment_bot?start=foreign_private` |
 
-The `FOREIGN_PRIVATE_LINK` in the bot's `.env` is the invite the user receives after opt-in.
+Для production нужно включить:
 
-Do not use the static private values as the final production gate. They are OK
-for smoke tests while `PRIVATE_REQUIRE_ACCESS_TOKEN=false`. For production set
-`PRIVATE_REQUIRE_ACCESS_TOKEN=true` in the bot. The site calls Supabase Edge
-Function `create-telegram-access-token`, which:
+```text
+PRIVATE_REQUIRE_ACCESS_TOKEN=true
+```
 
-1. requires `Authorization` header (`verify_jwt = true`);
-2. resolves the current Supabase user via `auth.getUser()`;
-3. queries `orders` with the service-role key and accepts the user only when at
-   least one row matches `payment_status = 'paid'` OR `status = 'completed'`;
-4. accepts request body `{ "segment": "ru_private" | "foreign_private" }` and
-   rejects anything else;
-5. signs a short token with `TELEGRAM_PRIVATE_ACCESS_SECRET` (same value as
-   `PRIVATE_ACCESS_SECRET` on the bot host);
-6. returns `{ "url": "https://t.me/<PRIVATE_BOT_USERNAME>?start=<token>" }`.
+Тогда сайт должен вызывать Supabase Edge Function
+`create-telegram-access-token`. Она должна:
 
-The token format is intentionally short enough for Telegram deep links:
-`v1.<segment-code>.<expiry-base36>.<hmac-signature>`. Current private segment
-codes are `rp` (`ru_private`) and `fp` (`foreign_private`). TTL is 10 minutes.
-The secret must live only in Supabase/VPS env-vars, never in React.
+1. требовать `Authorization` header (`verify_jwt=true`);
+2. получать текущего пользователя через `auth.getUser()`;
+3. service-role key проверять `orders`;
+4. пропускать только если есть заказ с `payment_status='paid'` или `status='completed'`;
+5. принимать body `{ "segment": "ru_private" | "foreign_private" }`;
+6. отклонять любые другие сегменты;
+7. подписывать короткий token через `TELEGRAM_PRIVATE_ACCESS_SECRET`;
+8. возвращать `{ "url": "https://t.me/<PRIVATE_BOT_USERNAME>?start=<token>" }`.
 
-### Production env vars
+Формат token:
 
-Supabase (function env):
-- `TELEGRAM_PRIVATE_ACCESS_SECRET` — shared HMAC secret
-- `PRIVATE_BOT_USERNAME` — e.g. `privatesegment_bot`
+```text
+v1.<segment-code>.<expiry-base36>.<hmac-signature>
+```
 
-Bot VPS:
-- `PRIVATE_ACCESS_SECRET` — same value as the Supabase secret
+Текущие segment codes:
+
+- `rp` → `ru_private`
+- `fp` → `foreign_private`
+
+TTL: 10 минут. Secret должен жить только в Supabase/VPS env-vars, не в React.
+
+## Production env vars
+
+Supabase function:
+
+- `TELEGRAM_PRIVATE_ACCESS_SECRET`
+- `PRIVATE_BOT_USERNAME`
+
+VPS с ботом:
+
+- `PRIVATE_ACCESS_SECRET`
 - `PRIVATE_REQUIRE_ACCESS_TOKEN=true`
 
-Reviews links (`reviews_tg_url_*`) stay static and are unaffected.
-The static `private_tg_url_*` values are staging-only fallbacks; the production
-VIP button on `Profile.tsx` invokes the Edge Function directly.
+`TELEGRAM_PRIVATE_ACCESS_SECRET` и `PRIVATE_ACCESS_SECRET` должны совпадать.
 
-## Gotcha: the Header EN/DE fallback
+## Важный fallback EN/DE
 
-`src/components/Header.tsx:74-75` falls back to the `_ru` variant if the language-specific key is empty:
+В `src/components/Header.tsx` есть fallback на RU, если EN/DE ключ пустой:
 
 ```ts
 const publicReviewsUrl = getSafeUrl(settings?.[`reviews_tg_url_${langCode}`] || settings?.['reviews_tg_url_ru']);
 const privateGroupUrl  = getSafeUrl(settings?.[`private_tg_url_${langCode}`]  || settings?.['private_tg_url_ru']);
 ```
 
-This means: **if `_en` or `_de` is missing in `site_settings`, an EN/DE user gets the RU deep link** — i.e. an EN-language user joining "reviews" would land in `ru_reviews`. Always set all three language keys explicitly, even when the value is identical.
+Если `_en` или `_de` не заполнить, англоязычный/немецкий пользователь может
+получить RU deep-link. Поэтому нужно явно заполнить все 6 ключей.
 
-(`src/pages/Profile.tsx:417-421` has the same fallback chain for `vipUrl`.)
+В `src/pages/Profile.tsx` аналогичный fallback для `vipUrl`.
 
-`getSafeUrl` only trims surrounding quotes and prepends `https://` if missing — `?start=…` query strings pass through unchanged.
+## Как обновить значения
 
-## Updating the values
+Вариант A — через админку:
 
-Two equivalent options:
+1. Зайти на сайт как admin.
+2. Открыть `/admin/links`.
+3. Вставить все 6 ссылок.
+4. Сохранить.
 
-### Option A — admin UI (3 minutes, no SQL)
+Вариант B — через Supabase SQL:
 
-1. Log in to the site as an admin.
-2. Open `/admin/links`.
-3. Paste each of the six values into the matching field.
-4. Save.
+1. Открыть Supabase → SQL editor.
+2. Вставить [integration/site_settings_upsert.sql](integration/site_settings_upsert.sql).
+3. Запустить.
 
-### Option B — Supabase SQL editor
+Изменения применяются после reload сайта.
 
-See [`integration/site_settings_upsert.sql`](integration/site_settings_upsert.sql). Open Supabase → SQL editor → paste → run. Idempotent (`ON CONFLICT (key) DO UPDATE`).
+## Smoke test
 
-Either way, the change takes effect on the next site reload (the `useSiteSettings` hook fetches once and caches in-memory).
-
-## Click-through smoke test
-
-After updating, verify each (language × segment) pair end-to-end. The site does **not** need to be redeployed — the settings hook refetches on page load.
-
-| # | Browser language | Site action | Expected Telegram bot behaviour |
+| # | Язык | Действие на сайте | Ожидание |
 | --- | --- | --- | --- |
-| 1 | RU | Header → "Отзывы" | `@reviewsegment_bot` opens, `/start ru_reviews`, opt-in → RU reviews invite link |
-| 2 | EN | Header → "Reviews" | `@reviewsegment_bot` opens, `/start foreign_reviews`, opt-in → foreign reviews invite link |
-| 3 | DE | Header → "Reviews" | same as EN (`foreign_reviews`) |
-| 4 | RU (paid) | Profile → "Join VIP" | `@privatesegment_bot` opens, `/start ru_private`, opt-in → RU private invite link |
-| 5 | EN (paid) | Profile → "Join VIP" | `@privatesegment_bot` opens, `/start foreign_private`, opt-in → foreign private invite link |
-| 6 | DE (paid) | Profile → "Join VIP" | same as EN |
+| 1 | RU | Header → `Отзывы` | reviews bot открывается с `ru_reviews` |
+| 2 | EN | Header → `Reviews` | reviews bot открывается с `foreign_reviews` |
+| 3 | DE | Header → `Reviews` | reviews bot открывается с `foreign_reviews` |
+| 4 | RU paid | Profile → VIP button | private bot открывается с `ru_private` или signed token на RU |
+| 5 | EN paid | Profile → VIP button | private bot открывается с `foreign_private` или signed token на Foreign |
+| 6 | DE paid | Profile → VIP button | как EN |
 
-After each test, check the corresponding row in `users` (DB) has `bot_kind`, `segment`, and `opted_in=1` set correctly. The full live smoke checklist is in [README.md → Live smoke test checklist](README.md#live-smoke-test-checklist).
+После каждого теста проверить в SQLite `users`: правильные `bot_kind`,
+`segment`, `opted_in=1`.
 
-## Token rotation
+## Ротация tokens
 
-The handles `reviewsegment_bot` / `privatesegment_bot` will be reissued before production. When that happens:
+Перед production:
 
-1. Revoke the old tokens in @BotFather (`/revoke`).
-2. Update `.env` on the bot host with the new tokens.
-3. Restart the bot service.
-4. Update the six `site_settings` values to point at the new handles.
-5. Re-run the click-through smoke test above.
+1. Перевыпустить tokens в BotFather (`/revoke`), если они попадали в чат/скриншот/лог.
+2. Обновить `.env` на VPS.
+3. Перезапустить сервис.
+4. Обновить 6 значений в `site_settings`, если изменились usernames.
+5. Повторить smoke test.

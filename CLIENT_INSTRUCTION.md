@@ -1,4 +1,4 @@
-# Telegram Backup Bots — Client Instruction
+# Telegram Backup Bots — инструкция для клиента
 
 ## Что это
 
