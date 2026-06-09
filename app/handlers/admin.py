@@ -41,6 +41,14 @@ _pending: dict[str, dict] = {}
 _background_tasks: set[asyncio.Task] = set()
 PENDING_TTL_SEC = 3600
 BACKGROUND_SHUTDOWN_TIMEOUT_SEC = 15.0
+SEGMENT_LABELS_RU = {
+    "ru_reviews": "🇷🇺 RU отзывы",
+    "foreign_reviews": "🌍 Foreign reviews",
+    "ru_private": "🇷🇺 RU приватный чат",
+    "foreign_private": "🌍 Foreign private",
+    "test": "🧪 Тестовый сегмент",
+    "unknown": "❔ Неизвестный сегмент",
+}
 
 
 def _segment_for_button(bot_kind: str, button_text: str) -> str | None:
@@ -109,12 +117,17 @@ async def shutdown_background_tasks(db: Database) -> None:
 async def cmd_stats(message: Message, db: Database, bot_kind: str) -> None:
     rows = await users_svc.stats_by_segment(db, bot_kind)
     if not rows:
-        await message.answer(f"[{bot_kind}] нет пользователей.")
+        await message.answer(f"📊 Статистика [{bot_kind}]\nПользователей пока нет.")
         return
-    lines = [f"📊 Stats [{bot_kind}]"]
+    lines = [f"📊 Статистика [{bot_kind}]"]
     for r in rows:
+        label = SEGMENT_LABELS_RU.get(r["segment"], r["segment"])
         lines.append(
-            f"• {r['segment']}: total={r['total']} optin={r['opted_in']} active={r['active']}"
+            "\n"
+            f"{label}\n"
+            f"Всего: {r['total']}\n"
+            f"Подписались: {r['opted_in']}\n"
+            f"Активны: {r['active']}"
         )
     await message.answer("\n".join(lines))
 
