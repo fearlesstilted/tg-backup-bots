@@ -74,12 +74,16 @@ PRIVATE_ACCESS_SECRET=... .venv/bin/python -m app.access_tokens ru_private 600
 
 Restricted to `ADMIN_IDS`:
 
+- `/menu` — show the Telegram button menu for admins.
 - `/stats` — per-segment counts (total / opted-in / active) for the current bot.
 - `/broadcast <segment>` — start a broadcast: bot prompts for text, shows a preview with recipient count and Confirm / Dry-run / Cancel buttons.
 - `/broadcast_status <id>` — current status and counters.
 - `/stop_broadcast <id>` — request stop; running loop checks every 50 sends.
 - `/last` — last 10 broadcasts for this bot.
 - `/test <segment>` — send the next message only to yourself (formatting check before a real broadcast).
+
+The same core actions are also available as Telegram buttons for admins:
+`📊 Статистика`, `📜 Последние`, `📣 Рассылка RU`, `📣 Рассылка Foreign`, `ℹ️ Помощь`.
 
 ## Broadcast engine
 
@@ -155,7 +159,7 @@ For each bot, run the matching segment (`ru_reviews`/`foreign_reviews` for revie
 
 | Step | Action | Expected |
 | --- | --- | --- |
-| 1 | `/start ru_reviews` (in reviews bot) | Opt-in message + button "✅ Подтвердить". Row in `users` with `opted_in=0, is_active=1`. |
+| 1 | `/start ru_reviews` (in reviews bot) | Opt-in message + localized button: `✅ Подтвердить` for RU, `✅ Confirm` for Foreign. Row in `users` with `opted_in=0, is_active=1`. |
 | 2 | Tap the button | Message edited to "Спасибо! Вот ваша ссылка: …" with the matching invite link. Row now `opted_in=1`. |
 | 3 | `/start garbage` | Neutral fallback ("ссылка пришла без параметра"), no link. Row stored with `segment='unknown'`. |
 | 4 | `/start ru_private` in **reviews** bot | Treated as `unknown` — cross-bot segment is rejected. |

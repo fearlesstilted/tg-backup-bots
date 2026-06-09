@@ -12,10 +12,37 @@ from ..db import Database
 from ..keyboards import optin_keyboard
 from ..services import users as users_svc
 
-OPTIN_TEXT = (
-    "Привет! Нажмите кнопку ниже, чтобы подтвердить подписку. "
-    "Так мы сможем прислать ссылку и не потеряем связь."
+OPTIN_TEXT_RU = (
+    "Привет! Это резервный бот ShmaliShop.\n\n"
+    "Нажмите кнопку ниже, чтобы подтвердить подписку. Если основной чат или "
+    "канал будет недоступен, мы пришлём сюда актуальную ссылку."
 )
+OPTIN_TEXT_EN = (
+    "Hi! This is the ShmaliShop backup bot.\n\n"
+    "Tap the button below to confirm your subscription. If the main chat or "
+    "channel becomes unavailable, we will send the updated link here."
+)
+
+UNKNOWN_TEXT_RU = (
+    "Привет! Похоже, ссылка открыта без нужного параметра. "
+    "Пожалуйста, откройте бота по кнопке на сайте или по закреплённой ссылке в чате."
+)
+UNKNOWN_TEXT_EN = (
+    "Hi! This link was opened without the required parameter. "
+    "Please open the bot from the website button or from the pinned chat link."
+)
+
+
+def _is_ru_segment(segment: str, language_code: str | None = None) -> bool:
+    return segment.startswith("ru_") or (segment == "unknown" and language_code == "ru")
+
+
+def _optin_text(segment: str, language_code: str | None = None) -> str:
+    return OPTIN_TEXT_RU if _is_ru_segment(segment, language_code) else OPTIN_TEXT_EN
+
+
+def _unknown_text(language_code: str | None = None) -> str:
+    return UNKNOWN_TEXT_RU if language_code == "ru" else UNKNOWN_TEXT_EN
 
 log = logging.getLogger(__name__)
 
@@ -66,13 +93,12 @@ async def cmd_start(
     )
 
     if segment == "unknown":
-        await message.answer(
-            "Привет! Похоже, ссылка пришла без параметра. "
-            "Зайдите по корректной ссылке, чтобы получить доступ."
-        )
+        await message.answer(_unknown_text(user.language_code))
         return
 
-    await message.answer(OPTIN_TEXT, reply_markup=optin_keyboard(segment))
+    await message.answer(
+        _optin_text(segment, user.language_code), reply_markup=optin_keyboard(segment)
+    )
 
 
 async def cb_optin(
@@ -113,7 +139,10 @@ async def cb_optin(
 
     link = settings.segment_links.get(segment)
     if link:
-        body = f"Спасибо! Вот ваша ссылка:\n{link}"
+        if _is_ru_segment(segment):
+            body = f"Спасибо! Вот ваша ссылка:\n{link}"
+        else:
+            body = f"Thank you! Here is your link:\n{link}"
     else:
         body = "Спасибо! Подписка подтверждена (тестовый сегмент)."
 

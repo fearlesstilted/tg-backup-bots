@@ -13,7 +13,15 @@ from aiogram.types import CallbackQuery, Message
 
 from ..config import SEGMENTS_BY_BOT, Settings, is_valid_segment
 from ..db import Database
-from ..keyboards import broadcast_confirm_keyboard
+from ..keyboards import (
+    BTN_BROADCAST_FOREIGN,
+    BTN_BROADCAST_RU,
+    BTN_HELP,
+    BTN_LAST,
+    BTN_STATS,
+    admin_menu_keyboard,
+    broadcast_confirm_keyboard,
+)
 from ..services import broadcasts as bcast_svc
 from ..services import users as users_svc
 
@@ -33,6 +41,20 @@ _pending: dict[str, dict] = {}
 _background_tasks: set[asyncio.Task] = set()
 PENDING_TTL_SEC = 3600
 BACKGROUND_SHUTDOWN_TIMEOUT_SEC = 15.0
+
+
+def _segment_for_button(bot_kind: str, button_text: str) -> str | None:
+    if bot_kind == "reviews":
+        mapping = {
+            BTN_BROADCAST_RU: "ru_reviews",
+            BTN_BROADCAST_FOREIGN: "foreign_reviews",
+        }
+    else:
+        mapping = {
+            BTN_BROADCAST_RU: "ru_private",
+            BTN_BROADCAST_FOREIGN: "foreign_private",
+        }
+    return mapping.get(button_text)
 
 
 def _sweep_pending(now: float | None = None) -> None:
@@ -97,6 +119,34 @@ async def cmd_stats(message: Message, db: Database, bot_kind: str) -> None:
     await message.answer("\n".join(lines))
 
 
+async def cmd_menu(message: Message, bot_kind: str) -> None:
+    await message.answer(
+        f"Админ-меню [{bot_kind}]. Выберите действие кнопкой ниже.",
+        reply_markup=admin_menu_keyboard(),
+    )
+
+
+async def cmd_help(message: Message, bot_kind: str) -> None:
+    valid = sorted(s for s in SEGMENTS_BY_BOT.get(bot_kind, frozenset()) if s != "test")
+    await message.answer(
+        "Доступные действия:\n"
+        "• 📊 Статистика — пользователи по сегментам\n"
+        "• 📜 Последние — последние рассылки\n"
+        "• 📣 Рассылка RU / Foreign — начать рассылку\n\n"
+        "Команды тоже работают:\n"
+        f"• /broadcast SEGMENT, где SEGMENT: {', '.join(valid)}\n"
+        "• /broadcast_status ID\n"
+        "• /stop_broadcast ID\n"
+        "• /test SEGMENT\n",
+        reply_markup=admin_menu_keyboard(),
+    )
+
+
+async def cmd_cancel(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Действие отменено.", reply_markup=admin_menu_keyboard())
+
+
 async def cmd_last(message: Message, db: Database, bot_kind: str) -> None:
     rows = await bcast_svc.list_recent(db, bot_kind, limit=10)
     if not rows:
@@ -143,13 +193,12 @@ async def cmd_stop_broadcast(
     await message.answer("Остановка запрошена." if ok else "Не идёт или уже завершена.")
 
 
-async def cmd_broadcast(
+async def _start_broadcast_flow(
     message: Message,
-    command: CommandObject,
     state: FSMContext,
     bot_kind: str,
+    segment: str,
 ) -> None:
-    segment = (command.args or "").strip()
     if (not is_valid_segment(bot_kind, segment)) or segment == "test":
         valid = sorted(s for s in SEGMENTS_BY_BOT.get(bot_kind, frozenset()) if s != "test")
         await message.answer(
@@ -159,6 +208,29 @@ async def cmd_broadcast(
     await state.set_state(BroadcastCompose.awaiting_text)
     await state.update_data(segment=segment)
     await message.answer(f"Пришлите текст рассылки для сегмента «{segment}».")
+
+
+async def cmd_broadcast(
+    message: Message,
+    command: CommandObject,
+    state: FSMContext,
+    bot_kind: str,
+) -> None:
+    await _start_broadcast_flow(
+        message, state, bot_kind, (command.args or "").strip()
+    )
+
+
+async def button_broadcast(
+    message: Message,
+    state: FSMContext,
+    bot_kind: str,
+) -> None:
+    segment = _segment_for_button(bot_kind, message.text or "")
+    if not segment:
+        await message.answer("Неизвестная кнопка.", reply_markup=admin_menu_keyboard())
+        return
+    await _start_broadcast_flow(message, state, bot_kind, segment)
 
 
 async def broadcast_text(
@@ -287,11 +359,21 @@ def build_router(settings: Settings) -> Router:
     r.message.filter(_is_admin_msg)
     r.callback_query.filter(_is_admin_cb)
 
+    r.message.register(cmd_menu, Command("menu"))
+    r.message.register(cmd_help, Command("help"))
+    r.message.register(cmd_help, F.text == BTN_HELP)
+    r.message.register(cmd_cancel, Command("cancel"))
     r.message.register(cmd_stats, Command("stats"))
+    r.message.register(cmd_stats, F.text == BTN_STATS)
     r.message.register(cmd_last, Command("last"))
+    r.message.register(cmd_last, F.text == BTN_LAST)
     r.message.register(cmd_broadcast_status, Command("broadcast_status"))
     r.message.register(cmd_stop_broadcast, Command("stop_broadcast"))
     r.message.register(cmd_broadcast, Command("broadcast"))
+    r.message.register(
+        button_broadcast,
+        F.text.in_({BTN_BROADCAST_RU, BTN_BROADCAST_FOREIGN}),
+    )
     r.message.register(cmd_test, Command("test"))
     r.message.register(broadcast_text, BroadcastCompose.awaiting_text, F.text)
     r.message.register(test_text, TestCompose.awaiting_text, F.text)

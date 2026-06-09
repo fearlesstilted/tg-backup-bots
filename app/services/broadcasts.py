@@ -96,7 +96,11 @@ async def _iter_recipients(
         "ORDER BY id",
         (bot_kind, segment),
     )
-    async for row in cur:
+    # Materialize the recipient snapshot before sending. This keeps the read
+    # cursor closed while the broadcast loop writes delivery logs and marks
+    # blocked users inactive on the same connection.
+    rows = await cur.fetchall()
+    for row in rows:
         yield int(row["id"]), int(row["telegram_id"])
 
 
