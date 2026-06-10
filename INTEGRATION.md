@@ -4,7 +4,7 @@
 
 Reviews links публичные и могут храниться как статические значения в
 `site_settings`. Private links в production должны выдаваться через подписанный
-short token, иначе скопированная ссылка вида `privatesegment_bot?start=ru_private`
+short token, иначе скопированная ссылка вида `shmali_members_bot?start=ru_private`
 даёт доступ к приватному invite.
 
 ## Боты
@@ -14,8 +14,8 @@ short token, иначе скопированная ссылка вида `privat
 
 | Bot kind | Telegram handle |
 | --- | --- |
-| `reviews` | `@reviewsegment_bot` |
-| `private` | `@privatesegment_bot` |
+| `reviews` | `@shmali_reviews_bot` |
+| `private` | `@shmali_members_bot` |
 
 Формат deep-link остаётся тем же:
 
@@ -42,9 +42,9 @@ Reviews bot публичный, эти ссылки можно использо�
 
 | Key | Value |
 | --- | --- |
-| `reviews_tg_url_ru` | `https://t.me/reviewsegment_bot?start=ru_reviews` |
-| `reviews_tg_url_en` | `https://t.me/reviewsegment_bot?start=foreign_reviews` |
-| `reviews_tg_url_de` | `https://t.me/reviewsegment_bot?start=foreign_reviews` |
+| `reviews_tg_url_ru` | `https://t.me/shmali_reviews_bot?start=ru_reviews` |
+| `reviews_tg_url_en` | `https://t.me/shmali_reviews_bot?start=foreign_reviews` |
+| `reviews_tg_url_de` | `https://t.me/shmali_reviews_bot?start=foreign_reviews` |
 
 ## Значения для Private
 
@@ -56,9 +56,9 @@ PRIVATE_REQUIRE_ACCESS_TOKEN=false
 
 | Key | Value |
 | --- | --- |
-| `private_tg_url_ru` | `https://t.me/privatesegment_bot?start=ru_private` |
-| `private_tg_url_en` | `https://t.me/privatesegment_bot?start=foreign_private` |
-| `private_tg_url_de` | `https://t.me/privatesegment_bot?start=foreign_private` |
+| `private_tg_url_ru` | `https://t.me/shmali_members_bot?start=ru_private` |
+| `private_tg_url_en` | `https://t.me/shmali_members_bot?start=foreign_private` |
+| `private_tg_url_de` | `https://t.me/shmali_members_bot?start=foreign_private` |
 
 Для production нужно включить:
 

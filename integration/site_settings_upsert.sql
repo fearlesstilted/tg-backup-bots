@@ -14,14 +14,14 @@
 
 INSERT INTO site_settings (key, value) VALUES
   -- Reviews bot (public — anyone can use)
-  ('reviews_tg_url_ru', 'https://t.me/reviewsegment_bot?start=ru_reviews'),
-  ('reviews_tg_url_en', 'https://t.me/reviewsegment_bot?start=foreign_reviews'),
-  ('reviews_tg_url_de', 'https://t.me/reviewsegment_bot?start=foreign_reviews'),
+  ('reviews_tg_url_ru', 'https://t.me/shmali_reviews_bot?start=ru_reviews'),
+  ('reviews_tg_url_en', 'https://t.me/shmali_reviews_bot?start=foreign_reviews'),
+  ('reviews_tg_url_de', 'https://t.me/shmali_reviews_bot?start=foreign_reviews'),
 
   -- Private bot (VIP — button shown only when hasPaidOrders is true)
-  ('private_tg_url_ru', 'https://t.me/privatesegment_bot?start=ru_private'),
-  ('private_tg_url_en', 'https://t.me/privatesegment_bot?start=foreign_private'),
-  ('private_tg_url_de', 'https://t.me/privatesegment_bot?start=foreign_private')
+  ('private_tg_url_ru', 'https://t.me/shmali_members_bot?start=ru_private'),
+  ('private_tg_url_en', 'https://t.me/shmali_members_bot?start=foreign_private'),
+  ('private_tg_url_de', 'https://t.me/shmali_members_bot?start=foreign_private')
 ON CONFLICT (key) DO UPDATE
   SET value = EXCLUDED.value,
       updated_at = now();

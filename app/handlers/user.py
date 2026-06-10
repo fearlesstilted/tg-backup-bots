@@ -12,15 +12,33 @@ from ..db import Database
 from ..keyboards import optin_keyboard
 from ..services import users as users_svc
 
-OPTIN_TEXT_RU = (
-    "Привет! Это резервный бот ShmaliShop.\n\n"
-    "Нажмите кнопку ниже, чтобы подтвердить подписку. Если основной чат или "
-    "канал будет недоступен, мы пришлём сюда актуальную ссылку."
+REVIEWS_WELCOME_RU = (
+    "Добро пожаловать в Shmali отзывы! 👋 Здесь наше сообщество делится "
+    "реальным опытом с продуктами Shmali. Читайте честные отзывы от клиентов "
+    "как ты — узнайте, что работает и что люди любят. Для нас прозрачность — "
+    "это всё.\n\n"
+    "Нажмите кнопку ниже, чтобы получить ссылку."
 )
-OPTIN_TEXT_EN = (
-    "Hi! This is the ShmaliShop backup bot.\n\n"
-    "Tap the button below to confirm your subscription. If the main chat or "
-    "channel becomes unavailable, we will send the updated link here."
+REVIEWS_WELCOME_EN = (
+    "Welcome to Shmali Reviews! 👋 This is where our community shares real "
+    "experiences with Shmali products. Read honest feedback from customers "
+    "like you — see what works, what people love, and make informed choices. "
+    "We’re all about transparency here.\n\n"
+    "Tap the button below to receive your link."
+)
+PRIVATE_WELCOME_RU = (
+    "Добро пожаловать в Shmali VIP Members Only! 🌿 Вы получили доступ к "
+    "закрытому чату нашего сообщества. Здесь вы общаетесь с другими клиентами "
+    "Shmali, получаете доступ к новым продуктам раньше всех и наслаждаетесь "
+    "эксклюзивными привилегиями. Теперь вы в нашем внутреннем кругу. 🤝\n\n"
+    "Нажмите кнопку ниже, чтобы получить ссылку."
+)
+PRIVATE_WELCOME_EN = (
+    "Welcome to Shmali VIP Members Only! 🌿 You’ve unlocked members-only "
+    "access to our exclusive community chat. Here you’ll connect directly "
+    "with fellow Shmali customers, get early access to new drops, and enjoy "
+    "VIP-only perks. You’re part of the inner circle now.\n\n"
+    "Tap the button below to receive your link."
 )
 
 UNKNOWN_TEXT_RU = (
@@ -37,8 +55,13 @@ def _is_ru_segment(segment: str, language_code: str | None = None) -> bool:
     return segment.startswith("ru_") or (segment == "unknown" and language_code == "ru")
 
 
-def _optin_text(segment: str, language_code: str | None = None) -> str:
-    return OPTIN_TEXT_RU if _is_ru_segment(segment, language_code) else OPTIN_TEXT_EN
+def _optin_text(
+    bot_kind: str, segment: str, language_code: str | None = None
+) -> str:
+    is_ru = _is_ru_segment(segment, language_code)
+    if bot_kind == "private":
+        return PRIVATE_WELCOME_RU if is_ru else PRIVATE_WELCOME_EN
+    return REVIEWS_WELCOME_RU if is_ru else REVIEWS_WELCOME_EN
 
 
 def _unknown_text(language_code: str | None = None) -> str:
@@ -97,7 +120,8 @@ async def cmd_start(
         return
 
     await message.answer(
-        _optin_text(segment, user.language_code), reply_markup=optin_keyboard(segment)
+        _optin_text(bot_kind, segment, user.language_code),
+        reply_markup=optin_keyboard(segment),
     )
 
 
